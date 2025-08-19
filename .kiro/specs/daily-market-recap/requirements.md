@@ -83,7 +83,7 @@ The system focuses on three core elements: 3 stocks that moved significantly, 3 
    - Using quote.finvizfinance() for individual stock data
    - Extracting market cap, price, and percentage change data from library methods
    - Built-in rate limiting and respectful API usage
-3. WHEN posting content THEN the system SHALL use X API v2 POST /2/tweets endpoint with OAuth 2.0 Authorization Code with PKCE authentication
+3. WHEN posting content THEN the system SHALL use X API v2 POST /2/tweets endpoint with OAuth 1.0a authentication
 4. WHEN finvizfinance library calls fail THEN the system SHALL implement retry logic with exponential backoff
 5. WHEN rate limiting web requests THEN the system SHALL respect limits:
    - X API v2: 200 requests per 15 minutes for tweet creation

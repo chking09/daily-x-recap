@@ -24,15 +24,26 @@
 
 - [x] 4. Build finvizfinance library integration
 
-  - Implement get_stock_movers() and get_watchlist_stocks() functions in data_collector.py
+  - Complete implementation of get_stock_movers() and get_watchlist_stocks() functions in data_collector.py
+  - Implement missing helper functions: \_scrape_finviz_movers() and \_get_finviz_stock_data()
   - Use finvizfinance.screener.overview.Overview() to filter stocks by performance and market cap
   - Use finvizfinance.quote.finvizfinance() to get individual stock fundamental data
   - Filter stocks by market cap > $2 billion criteria using screener filters
   - Return StockData objects with symbol, name, price, change percentage, and reasoning
-  - Leverage built-in rate limiting and respectful API usage
+  - Remove Alpha Vantage API references and use finvizfinance library exclusively
   - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 6.2_
 
-- [ ] 5. Implement Claude AI content generation
+- [x] 4.1 Fix data_collector.py code quality issues
+
+  - Remove unused imports (re, BeautifulSoup, Optional, unused config constants)
+  - Remove Alpha Vantage API functions (\_get_stock_quote_with_retry)
+  - Fix logging format to use lazy % formatting instead of f-strings
+  - Remove trailing whitespace and fix line length issues
+  - Add missing final newline
+  - _Requirements: 6.2_
+
+- [x] 5. Implement Claude AI content generation
+
 
   - Create generate_recap() function in content_generator.py
   - Use Anthropic client to process structured data into engaging content
@@ -40,10 +51,16 @@
   - Include context for stock movements and educational insights for beginners
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.1, 5.2, 5.3_
 
-- [ ] 6. Build X API publishing integration
+- [x] 6. Build X API publishing integration
+
+
+
+
+
 
   - Implement post_to_x() function in publisher.py
   - Use requests library to call POST /2/tweets endpoint with OAuth 1.0a authentication
+  - Implement OAuth 1.0a signature generation for X API authentication
   - Handle character limits and format content appropriately for X platform
   - Return success/failure status for logging
   - _Requirements: 4.1, 4.2, 6.3_
@@ -69,7 +86,7 @@
   - Write simple test script to verify Google Custom Search API returns financial news
   - Test finvizfinance library returns valid stock data with market cap filtering
   - Verify Claude AI generates appropriate content within character limits
-  - Test X API successfully posts content with proper OAuth 1.0a authentication
+  - Test X API successfully posts content with OAuth 1.0a authentication
   - _Requirements: 6.6_
 
 - [ ] 10. Perform end-to-end integration testing

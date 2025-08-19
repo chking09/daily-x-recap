@@ -5,12 +5,11 @@ Handles external data collection from financial APIs and web scraping
 
 import logging
 import time
-import re
-from typing import List, Optional
+from typing import List
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import requests
-from bs4 import BeautifulSoup
+from finvizfinance.screener.overview import Overview
+from finvizfinance.quote import finvizfinance
 
 from models import NewsArticle, StockData
 from config import (
@@ -19,9 +18,6 @@ from config import (
     GOOGLE_SEARCH_QUERIES,
     SEARCH_DATE_RESTRICT,
     MAX_SEARCH_RESULTS,
-    FINVIZ_BASE_URL,
-    FINVIZ_SCREENER_URL,
-    FINVIZ_QUOTE_URL,
     MIN_MARKET_CAP,
     STOCK_MOVERS_COUNT,
     WATCHLIST_STOCKS_COUNT,
@@ -50,7 +46,7 @@ def collect_market_news() -> List[NewsArticle]:
         
         # Search for financial news using configured queries
         for query in GOOGLE_SEARCH_QUERIES:
-            logging.info(f"Searching for: {query}")
+            logging.info("Searching for: %s", query)
             
             # Perform search with retry logic
             search_results = _perform_search_with_retry(
@@ -68,15 +64,15 @@ def collect_market_news() -> List[NewsArticle]:
                     )
                     news_articles.append(article)
                     
-                logging.info(f"Found {len(search_results['items'])} articles for query: {query}")
+                logging.info("Found %d articles for query: %s", len(search_results['items']), query)
             else:
-                logging.warning(f"No results found for query: {query}")
+                logging.warning("No results found for query: %s", query)
     
     except HttpError as e:
-        logging.error(f"Google Custom Search API error: {e}")
+        logging.error("Google Custom Search API error: %s", e)
         raise
     except Exception as e:
-        logging.error(f"Unexpected error collecting market news: {e}")
+        logging.error("Unexpected error collecting market news: %s", e)
         raise
     
     # Remove duplicates based on URL
@@ -87,7 +83,7 @@ def collect_market_news() -> List[NewsArticle]:
             unique_articles.append(article)
             seen_urls.add(article.url)
     
-    logging.info(f"Collected {len(unique_articles)} unique news articles")
+    logging.info("Collected %d unique news articles", len(unique_articles))
     return unique_articles
 
 
@@ -117,16 +113,16 @@ def _perform_search_with_retry(service, query: str, cx: str, date_restrict: str,
             
         except HttpError as e:
             if attempt == MAX_RETRIES - 1:
-                logging.error(f"Google Search API failed after {MAX_RETRIES} attempts: {e}")
+                logging.error("Google Search API failed after %d attempts: %s", MAX_RETRIES, e)
                 raise
             
             # Exponential backoff
             delay = RETRY_DELAY_BASE ** attempt
-            logging.warning(f"Google Search API attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+            logging.warning("Google Search API attempt %d failed, retrying in %ds: %s", attempt + 1, delay, e)
             time.sleep(delay)
         
         except Exception as e:
-            logging.error(f"Unexpected error in Google Search API call: {e}")
+            logging.error("Unexpected error in Google Search API call: %s", e)
             raise
 
 def get_stock_movers() -> List[StockData]:
@@ -139,27 +135,53 @@ def get_stock_movers() -> List[StockData]:
     logging.info("Collecting stock movers from Finviz")
     
     try:
-        # Get top gainers and losers from Finviz
-        gainers = _scrape_finviz_movers("ta_topgainers")
-        losers = _scrape_finviz_movers("ta_toplosers")
+        # Get top gainers using finvizfinance screener
+        foverview = Overview()
+        filters_dict = {'Market Cap.': '+Mid (over $2bln)'}  # Filter by market cap > $2B
+        foverview.set_filter(filters_dict=filters_dict)
         
-        # Combine and filter by market cap
-        all_movers = gainers + losers
-        filtered_movers = []
+        # Get screener data
+        gainers_df = foverview.screener_view(order='Change')
         
-        for stock in all_movers:
-            if stock.market_cap >= MIN_MARKET_CAP:
-                filtered_movers.append(stock)
+        stock_movers = []
         
-        # Sort by absolute change percentage and take top 3
-        filtered_movers.sort(key=lambda x: abs(x.price_change_percent), reverse=True)
-        top_movers = filtered_movers[:STOCK_MOVERS_COUNT]
+        # Process top gainers and losers
+        if not gainers_df.empty:
+            # Sort by absolute change percentage and take top movers
+            gainers_df['Change_Abs'] = gainers_df['Change'].abs()
+            top_movers_df = gainers_df.nlargest(STOCK_MOVERS_COUNT, 'Change_Abs')
+            
+            for _, row in top_movers_df.iterrows():
+                try:
+                    # Parse market cap
+                    market_cap_str = row.get('Market Cap', '0')
+                    market_cap = _parse_market_cap(market_cap_str)
+                    
+                    # Parse price change
+                    change_percent = float(row['Change'])
+                    
+                    # Create StockData object
+                    stock_data = StockData(
+                        symbol=row['Ticker'],
+                        company_name=row['Company'],
+                        current_price=float(row['Price']),
+                        price_change_percent=change_percent,
+                        market_cap=market_cap,
+                        reason=_generate_movement_reason(row['Ticker'], change_percent)
+                    )
+                    
+                    stock_movers.append(stock_data)
+                    logging.info("Added stock mover: %s (%.1f%%)", row['Ticker'], change_percent)
+                    
+                except (ValueError, KeyError) as e:
+                    logging.warning("Failed to process stock %s: %s", row.get('Ticker', 'Unknown'), e)
+                    continue
         
-        logging.info(f"Collected {len(top_movers)} stock movers")
-        return top_movers
+        logging.info("Collected %d stock movers", len(stock_movers))
+        return stock_movers
         
     except Exception as e:
-        logging.error(f"Error collecting stock movers: {e}")
+        logging.error("Error collecting stock movers: %s", e)
         raise
 
 
@@ -196,15 +218,16 @@ def get_watchlist_stocks() -> List[StockData]:
     try:
         for symbol, watch_reason in watchlist_candidates:
             try:
-                # Get stock data from Finviz
-                stock_data = _get_finviz_stock_data(symbol)
+                # Get stock data from Finviz using quote
+                stock = finvizfinance(symbol)
+                stock_data = _get_finviz_stock_data(stock)
                 
                 if stock_data and stock_data.market_cap >= MIN_MARKET_CAP:
                     # Update the reason for watching
                     stock_data.reason = watch_reason
                     watchlist_stocks.append(stock_data)
                     
-                    logging.info(f"Added to watchlist: {symbol} - {watch_reason}")
+                    logging.info("Added to watchlist: %s - %s", symbol, watch_reason)
                     
                     # Stop once we have enough stocks
                     if len(watchlist_stocks) >= WATCHLIST_STOCKS_COUNT:
@@ -214,77 +237,91 @@ def get_watchlist_stocks() -> List[StockData]:
                 time.sleep(1)
                 
             except Exception as e:
-                logging.warning(f"Failed to get data for {symbol}: {e}")
+                logging.warning("Failed to get data for %s: %s", symbol, e)
                 continue
     
     except Exception as e:
-        logging.error(f"Error collecting watchlist stocks: {e}")
+        logging.error("Error collecting watchlist stocks: %s", e)
         raise
     
-    logging.info(f"Collected {len(watchlist_stocks)} watchlist stocks")
+    logging.info("Collected %d watchlist stocks", len(watchlist_stocks))
     return watchlist_stocks
 
 
-def _get_stock_quote_with_retry(symbol: str) -> dict:
+
+def _get_finviz_stock_data(stock_quote) -> StockData:
     """
-    Get stock quote data with retry logic for Alpha Vantage API
+    Extract stock data from finvizfinance quote object
     
     Args:
-        symbol: Stock symbol to get quote for
+        stock_quote: finvizfinance quote object
         
     Returns:
-        Quote data dictionary or None if failed
+        StockData object with extracted information
     """
-    for attempt in range(MAX_RETRIES):
-        try:
-            # Use direct API call for better control
-            url = f"https://www.alphavantage.co/query"
-            params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': ALPHA_VANTAGE_API_KEY
-            }
-            
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # Check for API errors
-            if 'Error Message' in data:
-                logging.error(f"Alpha Vantage API error for {symbol}: {data['Error Message']}")
-                return None
-            
-            if 'Note' in data:
-                logging.warning(f"Alpha Vantage API rate limit for {symbol}: {data['Note']}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(60)  # Wait 1 minute for rate limit
-                    continue
-                return None
-            
-            # Extract quote data
-            global_quote = data.get('Global Quote', {})
-            if global_quote:
-                return global_quote
-            else:
-                logging.warning(f"No quote data returned for {symbol}")
-                return None
-                
-        except requests.RequestException as e:
-            if attempt == MAX_RETRIES - 1:
-                logging.error(f"Alpha Vantage API failed after {MAX_RETRIES} attempts for {symbol}: {e}")
-                return None
-            
-            # Exponential backoff
-            delay = RETRY_DELAY_BASE ** attempt
-            logging.warning(f"Alpha Vantage API attempt {attempt + 1} failed for {symbol}, retrying in {delay}s: {e}")
-            time.sleep(delay)
+    try:
+        # Get fundamental data
+        fundamentals = stock_quote.ticker_fundament()
         
-        except Exception as e:
-            logging.error(f"Unexpected error getting quote for {symbol}: {e}")
-            return None
+        # Extract required fields
+        symbol = fundamentals.get('Ticker', '')
+        company_name = fundamentals.get('Company', '')
+        price_str = fundamentals.get('Price', '0')
+        change_str = fundamentals.get('Change', '0%')
+        market_cap_str = fundamentals.get('Market Cap', '0')
+        
+        # Parse numeric values
+        current_price = float(price_str) if price_str != '-' else 0.0
+        price_change_percent = float(change_str.rstrip('%')) if change_str != '-' else 0.0
+        market_cap = _parse_market_cap(market_cap_str)
+        
+        return StockData(
+            symbol=symbol,
+            company_name=company_name,
+            current_price=current_price,
+            price_change_percent=price_change_percent,
+            market_cap=market_cap,
+            reason=""  # Will be set by calling function
+        )
+        
+    except (ValueError, KeyError) as e:
+        logging.error("Failed to parse stock data: %s", e)
+        return None
+
+
+def _parse_market_cap(market_cap_input) -> float:
+    """
+    Parse market cap string or float to numeric value in dollars
     
-    return None
+    Args:
+        market_cap_input: Market cap string like "2.5B" or "500M", or float value
+        
+    Returns:
+        Market cap as float in dollars
+    """
+    if not market_cap_input or market_cap_input == '-':
+        return 0.0
+    
+    # If already a float, return as is (assuming it's already in correct units)
+    if isinstance(market_cap_input, (int, float)):
+        return float(market_cap_input)
+    
+    try:
+        # Remove any non-numeric characters except B, M, K
+        clean_str = str(market_cap_input).replace('$', '').replace(',', '').strip()
+        
+        if clean_str.endswith('B'):
+            return float(clean_str[:-1]) * 1_000_000_000
+        elif clean_str.endswith('M'):
+            return float(clean_str[:-1]) * 1_000_000
+        elif clean_str.endswith('K'):
+            return float(clean_str[:-1]) * 1_000
+        else:
+            return float(clean_str)
+            
+    except (ValueError, IndexError):
+        logging.warning("Could not parse market cap: %s", market_cap_input)
+        return 0.0
 
 
 def _generate_movement_reason(symbol: str, change_percent: float) -> str:
@@ -292,7 +329,7 @@ def _generate_movement_reason(symbol: str, change_percent: float) -> str:
     Generate a simple reason for stock movement
     
     Args:
-        symbol: Stock symbol
+        symbol: Stock symbol (for future use in more sophisticated reasoning)
         change_percent: Percentage change
         
     Returns:
@@ -319,7 +356,7 @@ def _generate_movement_reason(symbol: str, change_percent: float) -> str:
     }
     
     reason_type = "positive" if change_percent > 0 else "negative"
-    # Use first reason for simplicity (in real implementation, could be more sophisticated)
+    # Use first reason for simplicity (could use symbol for more sophisticated reasoning later)
     base_reason = generic_reasons[reason_type][0]
     
-    return f"Stock {direction} {abs(change_percent):.1f}% on {base_reason}"
+    return "Stock %s %.1f%% on %s" % (direction, abs(change_percent), base_reason)

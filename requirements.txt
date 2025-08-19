@@ -1,5 +1,5 @@
 google-api-python-client==2.108.0
-anthropic==0.7.8
+anthropic==0.57.0
 requests==2.31.0
 python-dotenv==1.0.0
 finvizfinance==0.14.7
