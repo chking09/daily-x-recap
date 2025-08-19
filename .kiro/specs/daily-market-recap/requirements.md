@@ -3,7 +3,7 @@
 ## Introduction
 
 The Daily Market Recap is a simple data pipeline that:
-1. **Collects** financial news (Google Custom Search API) and stock data (Alpha Vantage API)
+1. **Collects** financial news (Google Custom Search API) and stock data (finvizfinance library)
 2. **Processes** the data using Claude AI to generate a witty, informative market summary
 3. **Publishes** the content automatically to X (Twitter) via X API v2
 
@@ -69,7 +69,7 @@ The system focuses on three core elements: 3 stocks that moved significantly, 3 
 
 ### Requirement 6
 
-**User Story:** As a system administrator, I want the program to use reliable APIs for data gathering, so that the market recap has accurate, up-to-date information from trusted sources.
+**User Story:** As a system administrator, I want the program to use reliable data sources for gathering information, so that the market recap has accurate, up-to-date information from trusted sources.
 
 #### Acceptance Criteria
 
@@ -78,14 +78,15 @@ The system focuses on three core elements: 3 stocks that moved significantly, 3 
    - Required parameters: cx (Custom Search Engine ID), q (query terms)
    - Optional parameters: dateRestrict for recent news, siteSearch for specific financial sites
    - Support for up to 100 results per query with pagination
-2. WHEN retrieving stock data THEN the system SHALL use Alpha Vantage API endpoints including:
-   - TimeSeries.get_intraday() for real-time stock prices
-   - TimeSeries.get_quote_endpoint() for current stock quotes
-   - Support for pandas output format for data processing
+2. WHEN retrieving stock data THEN the system SHALL use finvizfinance library including:
+   - Using screener.overview.Overview() for filtering stocks by performance
+   - Using quote.finvizfinance() for individual stock data
+   - Extracting market cap, price, and percentage change data from library methods
+   - Built-in rate limiting and respectful API usage
 3. WHEN posting content THEN the system SHALL use X API v2 POST /2/tweets endpoint with OAuth 2.0 Authorization Code with PKCE authentication
-4. WHEN API calls fail THEN the system SHALL implement retry logic with exponential backoff (Alpha Vantage supports configurable retries)
-5. WHEN API rate limits are reached THEN the system SHALL respect limits:
+4. WHEN finvizfinance library calls fail THEN the system SHALL implement retry logic with exponential backoff
+5. WHEN rate limiting web requests THEN the system SHALL respect limits:
    - X API v2: 200 requests per 15 minutes for tweet creation
-   - Alpha Vantage: Standard rate limits per API key
+   - finvizfinance library: Built-in rate limiting and respectful usage
    - Google Custom Search API: 100 queries per day (free tier), 10,000 queries per day (paid)
-6. WHEN API responses are received THEN the system SHALL validate data quality and handle JSON response formats appropriately
+6. WHEN finvizfinance responses are received THEN the system SHALL validate data structure and handle library errors appropriately

@@ -11,7 +11,7 @@ This is a straightforward data pipeline: **Collect → Process → Publish**
 
 ### MUST INCLUDE (Core Features Only)
 - Google Custom Search API for financial news
-- Alpha Vantage API for stock data (3 movers, 3 watchlist)
+- finvizfinance library for stock data (3 movers, 3 watchlist)
 - Claude AI for content generation
 - X API v2 for posting
 - Basic error handling and logging
@@ -35,7 +35,7 @@ This is a straightforward data pipeline: **Collect → Process → Publish**
 
 ### Implementation Priority
 1. **MVP First**: Get basic data flow working end-to-end
-2. **One API at a time**: Implement and test each API integration separately
+2. **One integration at a time**: Implement and test each API/library integration separately
 3. **Minimal viable features**: No bells and whistles until core works
 4. **Hardcode initially**: Use configuration files only when absolutely necessary
 
@@ -56,7 +56,7 @@ If any answer is "no" or "maybe", **don't build it**.
 ## Success Criteria
 The project is complete when:
 - It can automatically generate and post one daily market recap
-- All three APIs are integrated and working
+- Google API and finvizfinance library are integrated and working
 - Basic error handling prevents crashes
 - Can be scheduled to run daily
 

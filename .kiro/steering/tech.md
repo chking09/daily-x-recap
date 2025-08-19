@@ -13,8 +13,8 @@ inclusion: always
 
 ### API Integration Libraries
 
-- **Google APIs**: `googleapiclient-discovery` (official Google client)
-- **Alpha Vantage**: `alpha-vantage` (official Python wrapper)
+- **Google APIs**: `google-api-python-client` (official Google client)
+- **Finviz Data**: `finvizfinance` (Python library for Finviz data access)
 - **Claude AI**: `anthropic` (official Anthropic client)
 - **X API**: `requests` (direct HTTP calls, no third-party wrapper)
 - **Environment**: `python-dotenv` (environment variable management)
@@ -52,8 +52,9 @@ def api_call_with_retry(func, max_retries=3):
 
 ### Rate Limiting Strategy
 
-- **Respect API limits**: Don't implement complex rate limiting
-- **Fail gracefully**: If rate limited, log and exit
+- **Use finvizfinance library**: Built-in rate limiting and respectful requests
+- **Simple delays**: Minimal delays between different data requests
+- **Fail gracefully**: If API fails, log and exit
 - **No queuing**: Don't build request queues or delays
 
 ## Data Processing Guidelines
@@ -83,11 +84,10 @@ def api_call_with_retry(func, max_retries=3):
 The .env file is already created with all required API keys:
 
 - Google Custom Search API key and CSE ID
-- Alpha Vantage API key
 - Anthropic Claude API key
 - X (Twitter) API credentials (Bearer token, API key/secret, Access token/secret)
 
-**No setup required** - API keys are ready for immediate use in development.
+**No Alpha Vantage needed** - Using free finvizfinance library instead of paid API.
 
 ### Configuration Constants
 
@@ -127,7 +127,7 @@ logging.basicConfig(
 ### Testing Checklist
 
 - [ ] Google Custom Search returns financial news
-- [ ] Alpha Vantage returns stock data with market cap info
+- [ ] finvizfinance library returns stock movers and watchlist data
 - [ ] Claude generates appropriate content
 - [ ] X API posts content successfully
 - [ ] Full pipeline completes without errors

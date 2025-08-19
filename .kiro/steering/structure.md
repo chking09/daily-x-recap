@@ -10,7 +10,7 @@ inclusion: always
 ```
 daily-market-recap/
 ├── main.py                 # Entry point and orchestration
-├── data_collector.py       # API integrations (Google + Alpha Vantage)
+├── data_collector.py       # API integrations (Google + finvizfinance)
 ├── content_generator.py    # Claude AI integration
 ├── publisher.py           # X API integration
 ├── models.py              # Data classes only
@@ -27,7 +27,7 @@ daily-market-recap/
 - **Not**: Business logic, API calls, or data processing
 
 #### data_collector.py
-- **Only**: External API integrations and data fetching
+- **Only**: External API integrations and finvizfinance library for data fetching
 - **Not**: Data processing, content generation, or publishing
 
 #### content_generator.py
@@ -70,8 +70,8 @@ daily-market-recap/
 ## Dependencies Management
 
 ### Allowed Dependencies
-- `googleapiclient-discovery` (Google APIs)
-- `alpha-vantage` (Stock data)
+- `google-api-python-client` (Google APIs)
+- `finvizfinance` (Finviz data access)
 - `anthropic` (Claude AI)
 - `requests` (HTTP requests)
 - `python-dotenv` (Environment variables)
@@ -94,11 +94,12 @@ from dataclasses import dataclass
 
 # Third-party imports
 import requests
-from alpha_vantage.timeseries import TimeSeries
+from finvizfinance.screener.overview import Overview
+from finvizfinance.quote import finvizfinance
 
 # Local imports
 from models import StockData, NewsArticle
-from config import ALPHA_VANTAGE_API_KEY
+from config import MIN_MARKET_CAP
 ```
 
 ## Anti-Patterns to Avoid
